@@ -1,0 +1,6 @@
+{
+  "extends": "@svelte-plate/config/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  }
+}
