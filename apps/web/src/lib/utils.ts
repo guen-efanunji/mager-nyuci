@@ -1,5 +1,9 @@
 export { cn } from 'cn';
 
+export function formatRupiah(value: number): string {
+	return 'Rp' + new Intl.NumberFormat('id-ID').format(value).replace(/\s/g, '');
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WithoutChild<T> = T extends { child?: any } ? Omit<T, 'child'> : T;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

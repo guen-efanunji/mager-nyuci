@@ -1,0 +1,134 @@
+enum Unit {
+  kg
+  pcs
+}
+
+enum OrderStatus {
+  diterima
+  dicuci
+  dikeringkan
+  disetrika
+  siap_diambil
+  selesai
+  dibatalkan
+}
+
+enum PaymentStatus {
+  belum_bayar
+  lunas
+}
+
+enum WhatsAppLogStatus {
+  success
+  failed
+}
+
+model ServiceCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  unit        Unit
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  priceItems  PriceItem[]
+  orderItems  OrderItem[]
+
+  @@map("service_categories")
+}
+
+model PriceItem {
+  id                String          @id @default(cuid())
+  serviceCategoryId String
+  serviceCategory   ServiceCategory @relation(fields: [serviceCategoryId], references: [id], onDelete: Cascade)
+  minQty            Decimal         @db.Decimal(8, 2)
+  price             Int
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  orderItems        OrderItem[]
+
+  @@unique([serviceCategoryId, minQty])
+  @@map("price_items")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(100)
+  whatsapp  String?  @unique @db.VarChar(20)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+
+  @@map("customers")
+}
+
+model Order {
+  id             String   @id @default(cuid())
+  orderCode      String   @unique @db.VarChar(15)
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  totalPrice     Int
+  status         OrderStatus @default(diterima)
+  paymentStatus  PaymentStatus @default(belum_bayar)
+  trackingToken  String   @unique @db.Char(32)
+  notes          String?  @db.Text
+  cancelReason   String?  @db.Text
+  createdById    String?
+  createdBy      User?    @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items          OrderItem[]
+  statusHistories OrderStatusHistory[]
+  whatsappLogs    WhatsAppLog[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String          @id @default(cuid())
+  orderId           String
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceCategoryId String
+  serviceCategory   ServiceCategory @relation(fields: [serviceCategoryId], references: [id], onDelete: Restrict)
+  priceItemId       String?
+  priceItem         PriceItem?      @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
+  qty               Decimal         @db.Decimal(8, 2)
+  unitPrice         Int
+  subtotal          Int
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  statusLama  OrderStatus?
+  statusBaru  OrderStatus
+  updatedById String?
+  updatedBy   User?       @relation("OrderStatusUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
+
+  @@map("order_status_histories")
+}
+
+model WhatsAppLog {
+  id            String            @id @default(cuid())
+  orderId       String
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  toNumber      String            @db.VarChar(20)
+  driver        String            @db.VarChar(20)
+  status        WhatsAppLogStatus
+  errorMessage  String?           @db.Text
+  createdAt     DateTime          @default(now())
+
+  @@map("whatsapp_logs")
+}

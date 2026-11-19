@@ -13,9 +13,8 @@
 		{#each items as item (item.title)}
 			{@const isActive =
 				item.url === '/dashboard'
-					? page.url.pathname === '/dashboard' && !page.url.hash
-					: item.url.startsWith('/dashboard#') &&
-						page.url.hash === item.url.slice('/dashboard'.length)}
+					? page.url.pathname === '/dashboard'
+					: page.url.pathname === item.url || page.url.pathname.startsWith(item.url + '/')}
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton
 					{isActive}
