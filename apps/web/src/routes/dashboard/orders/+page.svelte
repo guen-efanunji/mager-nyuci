@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -19,6 +20,7 @@
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import EyeIcon from '@lucide/svelte/icons/eye';
@@ -32,9 +34,9 @@
 
 	let { data, form } = $props();
 
-	let searchQuery = $state('');
-	let statusFilter = $state('all');
-	let paymentFilter = $state('all');
+	let searchQuery = $state(untrack(() => data.q ?? ''));
+	let statusFilter = $state(untrack(() => data.status ?? 'all'));
+	let paymentFilter = $state(untrack(() => data.payment ?? 'all'));
 	let advancingId = $state<string | null>(null);
 
 	$effect(() => {
@@ -213,9 +215,11 @@
 								: 'Semua pembayaran'}
 					</Select.Trigger>
 					<Select.Content>
-						<Select.Item value="all">Semua pembayaran</Select.Item>
-						<Select.Item value="belum_bayar">Belum Bayar</Select.Item>
-						<Select.Item value="lunas">Lunas</Select.Item>
+						<Select.Group>
+							<Select.Item value="all">Semua pembayaran</Select.Item>
+							<Select.Item value="belum_bayar">Belum Bayar</Select.Item>
+							<Select.Item value="lunas">Lunas</Select.Item>
+						</Select.Group>
 					</Select.Content>
 				</Select.Root>
 
@@ -229,189 +233,203 @@
 					{/if}
 				</div>
 			</form>
+		</Card.Content>
+	</Card.Root>
 
-			<!-- Tab Status Cepat -->
-			<div class="flex flex-wrap gap-1.5 pt-0.5">
+	<!-- Tab Status & Tabel Order -->
+	<Tabs.Root
+		bind:value={statusFilter}
+		onValueChange={(v) => {
+			if (v && v !== (data.status ?? 'all')) {
+				applyFilter({ status: v });
+			}
+		}}
+		class="w-full flex-col gap-3"
+	>
+		<div class="w-full max-w-full overflow-x-auto pb-0.5">
+			<Tabs.List class="w-max min-w-full sm:w-fit sm:min-w-0">
 				{#each STATUS_TABS as tab (tab.key)}
 					{@const count = tab.key === 'all' ? data.totalAll : (data.statusCounts[tab.key] ?? 0)}
-					{@const active = data.status === tab.key}
-					<a
-						href={buildFilterUrl({ status: tab.key })}
-						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors {active
-							? 'border-primary bg-primary text-primary-foreground'
-							: 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}"
-					>
+					{@const active = statusFilter === tab.key}
+					<Tabs.Trigger value={tab.key} class="gap-1.5 px-2.5 text-xs sm:text-sm">
 						<span>{tab.label}</span>
-						<span
-							class="rounded-full px-1.5 py-0.2 text-[10px] tabular-nums {active
-								? 'bg-primary-foreground/20 text-primary-foreground'
-								: 'bg-muted text-muted-foreground'}"
+						<Badge
+							variant={active ? 'secondary' : 'outline'}
+							class="h-4 min-w-4 px-1.5 text-[10px] tabular-nums"
 						>
 							{count}
-						</span>
-					</a>
+						</Badge>
+					</Tabs.Trigger>
 				{/each}
-			</div>
-		</Card.Content>
-	</Card.Root>
+			</Tabs.List>
+		</div>
 
-	<!-- Tabel Order -->
-	<Card.Root>
-		<Card.Content class="p-0">
-			{#if data.orders.length === 0}
-				<Empty.Root class="border-0 py-14">
-					<Empty.Media variant="icon">
-						<ReceiptIcon class="size-5" />
-					</Empty.Media>
-					<Empty.Header>
-						<Empty.Title>
-							{hasActiveFilter ? 'Order tidak ditemukan' : 'Belum ada order'}
-						</Empty.Title>
-						<Empty.Description>
-							{hasActiveFilter
-								? 'Coba ubah kata kunci pencarian atau reset filter status.'
-								: 'Buat order pertama untuk mulai mencatat cucian pelanggan.'}
-						</Empty.Description>
-					</Empty.Header>
-					<Empty.Content>
-						<div class="flex flex-wrap justify-center gap-2">
-							{#if hasActiveFilter}
-								<Button variant="outline" href="/dashboard/orders">Reset Filter</Button>
-							{/if}
-							<Button href="/dashboard/orders/new" class="gap-1.5">
-								<PlusIcon class="size-4" />
-								Order Baru
-							</Button>
-						</div>
-					</Empty.Content>
-				</Empty.Root>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head>Order</Table.Head>
-							<Table.Head>Pelanggan</Table.Head>
-							<Table.Head class="hidden md:table-cell">Layanan</Table.Head>
-							<Table.Head>Total & Bayar</Table.Head>
-							<Table.Head>Status</Table.Head>
-							<Table.Head class="text-right">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each data.orders as o (o.id)}
-							{@const next = nextStatus(o.status as OrderStatus)}
-							{@const paymentKey = (o.paymentStatus ?? 'belum_bayar') as keyof typeof PAYMENT_LABEL}
-							{@const firstItem = o.items[0]}
-							<Table.Row>
-								<Table.Cell>
-									<a
-										href={`/dashboard/orders/${o.id}`}
-										class="font-mono text-sm font-semibold hover:text-primary hover:underline"
-									>
-										{o.orderCode}
-									</a>
-									<div class="text-xs text-muted-foreground tabular-nums">
-										{formatShortDate(o.createdAt)}
-									</div>
-								</Table.Cell>
-
-								<Table.Cell>
-									<a
-										href={`/dashboard/customers/${o.customerId}`}
-										class="font-medium hover:underline"
-									>
-										{o.customer.name}
-									</a>
-									{#if o.customer.whatsapp}
-										<div class="flex items-center gap-1 text-xs text-muted-foreground">
-											<PhoneIcon class="size-3" />
-											<span class="tabular-nums">{o.customer.whatsapp}</span>
+		{#each STATUS_TABS as tab (tab.key)}
+			<Tabs.Content value={tab.key} class="w-full">
+				{#if statusFilter === tab.key}
+					<Card.Root>
+						<Card.Content class="p-0">
+							{#if data.orders.length === 0}
+								<Empty.Root class="border-0 py-14">
+									<Empty.Media variant="icon">
+										<ReceiptIcon class="size-5" />
+									</Empty.Media>
+									<Empty.Header>
+										<Empty.Title>
+											{hasActiveFilter ? 'Order tidak ditemukan' : 'Belum ada order'}
+										</Empty.Title>
+										<Empty.Description>
+											{hasActiveFilter
+												? 'Coba ubah kata kunci pencarian atau reset filter status.'
+												: 'Buat order pertama untuk mulai mencatat cucian pelanggan.'}
+										</Empty.Description>
+									</Empty.Header>
+									<Empty.Content>
+										<div class="flex flex-wrap justify-center gap-2">
+											{#if hasActiveFilter}
+												<Button variant="outline" href="/dashboard/orders">Reset Filter</Button>
+											{/if}
+											<Button href="/dashboard/orders/new" class="gap-1.5">
+												<PlusIcon class="size-4" />
+												Order Baru
+											</Button>
 										</div>
-									{/if}
-								</Table.Cell>
+									</Empty.Content>
+								</Empty.Root>
+							{:else}
+								<Table.Root>
+									<Table.Header>
+										<Table.Row>
+											<Table.Head>Order</Table.Head>
+											<Table.Head>Pelanggan</Table.Head>
+											<Table.Head class="hidden md:table-cell">Layanan</Table.Head>
+											<Table.Head>Total & Bayar</Table.Head>
+											<Table.Head>Status</Table.Head>
+											<Table.Head class="text-right">Aksi</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each data.orders as o (o.id)}
+											{@const next = nextStatus(o.status as OrderStatus)}
+											{@const paymentKey = (o.paymentStatus ??
+												'belum_bayar') as keyof typeof PAYMENT_LABEL}
+											{@const firstItem = o.items[0]}
+											<Table.Row>
+												<Table.Cell>
+													<a
+														href={`/dashboard/orders/${o.id}`}
+														class="font-mono text-sm font-semibold hover:text-primary hover:underline"
+													>
+														{o.orderCode}
+													</a>
+													<div class="text-xs text-muted-foreground tabular-nums">
+														{formatShortDate(o.createdAt)}
+													</div>
+												</Table.Cell>
 
-								<Table.Cell class="hidden max-w-[220px] md:table-cell">
-									{#if firstItem}
-										<div class="truncate text-sm">
-											{firstItem.serviceCategory.name}
-											<span class="text-muted-foreground tabular-nums">
-												({firstItem.qty}
-												{firstItem.serviceCategory.unit})
-											</span>
-										</div>
-										{#if o.items.length > 1}
-											<span class="text-xs text-muted-foreground">
-												+{o.items.length - 1} layanan lainnya
-											</span>
-										{/if}
-									{:else}
-										<span class="text-xs text-muted-foreground">-</span>
-									{/if}
-								</Table.Cell>
-
-								<Table.Cell>
-									<div class="font-semibold tabular-nums">{formatRupiah(o.totalPrice)}</div>
-									<Badge class="{PAYMENT_COLOR[paymentKey]} mt-1 text-[11px]">
-										{PAYMENT_LABEL[paymentKey]}
-									</Badge>
-								</Table.Cell>
-
-								<Table.Cell>
-									<Badge class={STATUS_COLOR[o.status as OrderStatus]}>
-										{STATUS_LABEL[o.status as OrderStatus]}
-									</Badge>
-								</Table.Cell>
-
-								<Table.Cell class="text-right">
-									<div class="flex items-center justify-end gap-1.5">
-										<Button
-											variant="outline"
-											size="sm"
-											href={`/dashboard/orders/${o.id}`}
-											class="gap-1 px-2.5"
-										>
-											<EyeIcon class="size-3.5" />
-											<span class="hidden sm:inline">Detail</span>
-										</Button>
-										{#if next}
-											<form
-												method="POST"
-												action="?/advanceStatus"
-												use:enhance={() => {
-													advancingId = o.id;
-													return async ({ update }) => {
-														try {
-															await update();
-														} finally {
-															advancingId = null;
-														}
-													};
-												}}
-											>
-												<input type="hidden" name="id" value={o.id} />
-												<Button
-													type="submit"
-													size="sm"
-													class="gap-1"
-													disabled={advancingId === o.id}
-												>
-													{#if advancingId === o.id}
-														<Spinner class="size-3.5" />
-													{:else}
-														<span class="hidden lg:inline">{STATUS_LABEL[next]}</span>
-														<span class="lg:hidden">Lanjut</span>
-														<ArrowRightIcon class="size-3.5" />
+												<Table.Cell>
+													<a
+														href={`/dashboard/customers/${o.customerId}`}
+														class="font-medium hover:underline"
+													>
+														{o.customer.name}
+													</a>
+													{#if o.customer.whatsapp}
+														<div class="flex items-center gap-1 text-xs text-muted-foreground">
+															<PhoneIcon class="size-3" />
+															<span class="tabular-nums">{o.customer.whatsapp}</span>
+														</div>
 													{/if}
-												</Button>
-											</form>
-										{/if}
-									</div>
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
-		</Card.Content>
-	</Card.Root>
+												</Table.Cell>
+
+												<Table.Cell class="hidden max-w-[220px] md:table-cell">
+													{#if firstItem}
+														<div class="truncate text-sm">
+															{firstItem.serviceCategory.name}
+															<span class="text-muted-foreground tabular-nums">
+																({firstItem.qty}
+																{firstItem.serviceCategory.unit})
+															</span>
+														</div>
+														{#if o.items.length > 1}
+															<span class="text-xs text-muted-foreground">
+																+{o.items.length - 1} layanan lainnya
+															</span>
+														{/if}
+													{:else}
+														<span class="text-xs text-muted-foreground">-</span>
+													{/if}
+												</Table.Cell>
+
+												<Table.Cell>
+													<div class="font-semibold tabular-nums">
+														{formatRupiah(o.totalPrice)}
+													</div>
+													<Badge class="{PAYMENT_COLOR[paymentKey]} mt-1 text-[11px]">
+														{PAYMENT_LABEL[paymentKey]}
+													</Badge>
+												</Table.Cell>
+
+												<Table.Cell>
+													<Badge class={STATUS_COLOR[o.status as OrderStatus]}>
+														{STATUS_LABEL[o.status as OrderStatus]}
+													</Badge>
+												</Table.Cell>
+
+												<Table.Cell class="text-right">
+													<div class="flex items-center justify-end gap-1.5">
+														<Button
+															variant="outline"
+															size="sm"
+															href={`/dashboard/orders/${o.id}`}
+															class="gap-1 px-2.5"
+														>
+															<EyeIcon class="size-3.5" />
+															<span class="hidden sm:inline">Detail</span>
+														</Button>
+														{#if next}
+															<form
+																method="POST"
+																action="?/advanceStatus"
+																use:enhance={() => {
+																	advancingId = o.id;
+																	return async ({ update }) => {
+																		try {
+																			await update();
+																		} finally {
+																			advancingId = null;
+																		}
+																	};
+																}}
+															>
+																<input type="hidden" name="id" value={o.id} />
+																<Button
+																	type="submit"
+																	size="sm"
+																	class="gap-1"
+																	disabled={advancingId === o.id}
+																>
+																	{#if advancingId === o.id}
+																		<Spinner class="size-3.5" />
+																	{:else}
+																		<span class="hidden lg:inline">{STATUS_LABEL[next]}</span>
+																		<span class="lg:hidden">Lanjut</span>
+																		<ArrowRightIcon class="size-3.5" />
+																	{/if}
+																</Button>
+															</form>
+														{/if}
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+				{/if}
+			</Tabs.Content>
+		{/each}
+	</Tabs.Root>
 </div>
