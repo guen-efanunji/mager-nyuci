@@ -1,240 +1,516 @@
 <script lang="ts">
+	import { toggleMode } from 'mode-watcher';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import CheckIcon from '@lucide/svelte/icons/check';
-	import Layers3Icon from '@lucide/svelte/icons/layers-3';
+	import ClockIcon from '@lucide/svelte/icons/clock';
+	import FlameIcon from '@lucide/svelte/icons/flame';
+	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+	import MoonIcon from '@lucide/svelte/icons/moon';
+	import PackageCheckIcon from '@lucide/svelte/icons/package-check';
+	import QrCodeIcon from '@lucide/svelte/icons/qr-code';
+	import ReceiptIcon from '@lucide/svelte/icons/receipt';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
+	import ShirtIcon from '@lucide/svelte/icons/shirt';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
-	import ZapIcon from '@lucide/svelte/icons/zap';
+	import SunIcon from '@lucide/svelte/icons/sun';
+	import WashingMachineIcon from '@lucide/svelte/icons/washing-machine';
+	import WindIcon from '@lucide/svelte/icons/wind';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Progress } from '#lib/components/ui/progress/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import { cn, formatRupiah } from '#lib/utils.js';
+
+	let { data } = $props();
+
+	let orderCode = $state('');
+
+	const PREVIEW_STEPS = [
+		{
+			key: 'diterima',
+			label: 'Diterima',
+			time: '09:15',
+			done: true,
+			active: false,
+			icon: ReceiptIcon
+		},
+		{
+			key: 'dicuci',
+			label: 'Dicuci',
+			time: '10:30',
+			done: true,
+			active: false,
+			icon: WashingMachineIcon
+		},
+		{
+			key: 'dikeringkan',
+			label: 'Dikeringkan',
+			time: '12:40',
+			done: true,
+			active: false,
+			icon: WindIcon
+		},
+		{
+			key: 'disetrika',
+			label: 'Disetrika',
+			time: 'Saat ini',
+			done: false,
+			active: true,
+			icon: FlameIcon
+		},
+		{
+			key: 'siap_diambil',
+			label: 'Siap Diambil',
+			time: 'Estimasi',
+			done: false,
+			active: false,
+			icon: PackageCheckIcon
+		},
+		{ key: 'selesai', label: 'Selesai', time: '-', done: false, active: false, icon: CheckIcon }
+	] as const;
+
+	const WORKFLOW_HIGHLIGHTS = [
+		{
+			icon: QrCodeIcon,
+			step: '01',
+			title: 'Order & QR Nota Instan',
+			description:
+				'Kasir mencatat berat atau satuan cucian dengan tarif bertingkat otomatis. Setiap nota langsung memiliki kode unik dan QR code.'
+		},
+		{
+			icon: WashingMachineIcon,
+			step: '02',
+			title: 'Pantau 6 Tahap Proses',
+			description:
+				'Status bergerak jelas dari Diterima, Dicuci, Dikeringkan, Disetrika, Siap Diambil, hingga Selesai dengan riwayat waktu.'
+		},
+		{
+			icon: ShieldCheckIcon,
+			step: '03',
+			title: 'Verifikasi WhatsApp Aman',
+			description:
+				'Pelanggan cukup memasukkan kode order dan 4 digit terakhir nomor WhatsApp di halaman cek tanpa perlu membuat akun.'
+		}
+	] as const;
 </script>
 
 <svelte:head>
-	<title>Svelte Plate — Ship your next idea faster</title>
+	<title>KiloTrack — Pantau Status Cucian & Kelola Outlet Laundry</title>
 	<meta
 		name="description"
-		content="A polished SvelteKit starter with authentication, a flexible dashboard, and accessible UI components."
+		content="Lacak proses cucian 6 tahap secara real-time dengan kode order atau QR nota, serta kelola order, tarif, dan pelanggan laundry di KiloTrack."
 	/>
 </svelte:head>
 
-<div class="min-h-full overflow-hidden">
-	<header class="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-5 lg:px-10">
-		<a
-			href="/"
-			class="flex items-center gap-2.5 font-semibold tracking-tight"
-			aria-label="Svelte Plate home"
+<div class="flex min-h-svh flex-col bg-background text-foreground">
+	<header
+		class="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80"
+	>
+		<div
+			class="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-5 sm:px-8 lg:px-10"
 		>
-			<span
-				class="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"
-			>
-				<Layers3Icon class="size-5" />
-			</span>
-			<span>Svelte<span class="text-primary">Plate</span></span>
-		</a>
-		<nav class="flex items-center gap-3" aria-label="Main navigation">
-			<a
-				href="/login"
-				class="hidden rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex"
-			>
-				Sign in
+			<a href="/" class="flex items-center gap-2.5" aria-label="Beranda KiloTrack">
+				<span
+					class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs"
+				>
+					<ShirtIcon class="size-5" />
+				</span>
+				<span class="flex flex-col leading-tight">
+					<span class="text-base font-bold tracking-tight">KiloTrack</span>
+					<span class="text-[11px] text-muted-foreground">Laundry &amp; Order Tracking</span>
+				</span>
 			</a>
-			<Button href="/login" class="gap-2 rounded-lg">
-				Get started <ArrowRightIcon class="size-4" />
-			</Button>
-		</nav>
+
+			<nav
+				class="hidden items-center gap-6 text-sm font-medium text-muted-foreground md:flex"
+				aria-label="Navigasi utama"
+			>
+				<a href="#cara-kerja" class="transition-colors hover:text-foreground">Cara Kerja</a>
+				<a href="#layanan" class="transition-colors hover:text-foreground">Layanan &amp; Tarif</a>
+				<a href="/cek" class="transition-colors hover:text-foreground">Cek Cucian</a>
+			</nav>
+
+			<div class="flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="icon"
+					class="relative"
+					onclick={toggleMode}
+					aria-label="Ubah tema warna"
+				>
+					<SunIcon class="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+					<MoonIcon
+						class="absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0"
+					/>
+					<span class="sr-only">Ubah tema</span>
+				</Button>
+
+				{#if data.isLoggedIn}
+					<Button href="/dashboard">
+						<LayoutDashboardIcon data-icon="inline-start" />
+						Buka Dashboard
+					</Button>
+				{:else}
+					<Button variant="ghost" href="/login" class="hidden sm:inline-flex">Masuk Staf</Button>
+					<Button href="/cek">
+						Cek Status
+						<ArrowRightIcon data-icon="inline-end" />
+					</Button>
+				{/if}
+			</div>
+		</div>
 	</header>
 
-	<main>
-		<section
-			class="relative mx-auto grid min-h-[640px] w-full max-w-7xl items-center gap-14 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-10 lg:py-24"
-		>
+	<main class="flex-1">
+		<!-- Hero -->
+		<section class="relative overflow-hidden">
 			<div
-				class="pointer-events-none absolute -left-40 top-12 size-[32rem] rounded-full bg-primary/10 blur-[100px]"
+				class="pointer-events-none absolute -top-24 -left-32 size-[28rem] rounded-full bg-primary/10 blur-[100px]"
 			></div>
-			<div class="relative z-10 max-w-2xl">
-				<div
-					class="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-accent/60 px-3.5 py-1.5 text-xs font-medium text-accent-foreground"
-				>
-					<SparklesIcon class="size-3.5 text-primary" /> Your next project starts here
-				</div>
-				<h1
-					class="text-balance text-5xl font-semibold leading-[1.06] tracking-[-0.055em] sm:text-6xl lg:text-7xl"
-				>
-					A better starting point for <span class="text-primary">what’s next.</span>
-				</h1>
-				<p class="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
-					Skip the setup fatigue. Build on a thoughtful SvelteKit foundation with authentication, a
-					flexible dashboard, and beautiful components ready to make your own.
-				</p>
-				<div class="mt-9 flex flex-wrap items-center gap-3">
-					<Button href="/login" size="lg" class="gap-2 rounded-xl px-6 shadow-md">
-						Start building <ArrowRightIcon class="size-4" />
-					</Button>
-					<a
-						href="#features"
-						class="rounded-xl border border-border bg-card px-6 py-3 text-sm font-medium shadow-xs transition hover:bg-muted"
-					>
-						Explore the starter
-					</a>
-				</div>
-				<div class="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-muted-foreground">
-					<span class="inline-flex items-center gap-2">
-						<CheckIcon class="size-4 text-primary" /> SvelteKit + TypeScript
-					</span>
-					<span class="inline-flex items-center gap-2">
-						<CheckIcon class="size-4 text-primary" /> Accessible UI
-					</span>
-					<span class="inline-flex items-center gap-2">
-						<CheckIcon class="size-4 text-primary" /> Auth included
-					</span>
-				</div>
-			</div>
+			<div
+				class="mx-auto grid w-full max-w-7xl items-center gap-12 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:px-10 lg:py-24"
+			>
+				<div class="relative z-10 flex flex-col items-start gap-6">
+					<Badge variant="secondary" class="gap-1.5 px-3 py-1">
+						<SparklesIcon class="size-3.5 text-primary" />
+						Transparansi Cucian Real-Time
+					</Badge>
 
-			<div class="relative mx-auto w-full max-w-xl lg:ml-auto">
-				<div class="absolute -inset-5 rounded-[2rem] bg-primary/10 blur-2xl"></div>
-				<div
-					class="relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-2xl shadow-primary/10"
-				>
-					<div class="flex items-center justify-between border-b border-border px-5 py-4">
-						<div class="flex items-center gap-2">
-							<span class="size-2.5 rounded-full bg-destructive/80"></span><span
-								class="size-2.5 rounded-full bg-chart-2"
-							></span><span class="size-2.5 rounded-full bg-chart-3"></span>
-						</div>
-						<div class="text-xs font-medium text-muted-foreground">Workspace overview</div>
-						<div class="size-5"></div>
-					</div>
-					<div class="grid gap-5 p-5 sm:p-7">
-						<div class="flex items-start justify-between gap-4">
-							<div>
-								<p class="text-sm text-muted-foreground">Good morning, Alex</p>
-								<h2 class="mt-1 text-2xl font-semibold tracking-tight">Your workspace</h2>
-							</div>
-							<div
-								class="flex size-10 items-center justify-center rounded-xl bg-accent text-primary"
-							>
-								<ZapIcon class="size-5" />
-							</div>
-						</div>
-						<div class="grid grid-cols-2 gap-3">
-							<div class="rounded-xl border border-border bg-background p-4">
-								<p class="text-xs text-muted-foreground">Projects</p>
-								<p class="mt-2 text-2xl font-semibold">12</p>
-								<p class="mt-1 text-xs text-chart-3">+2 this month</p>
-							</div>
-							<div class="rounded-xl border border-border bg-background p-4">
-								<p class="text-xs text-muted-foreground">Tasks completed</p>
-								<p class="mt-2 text-2xl font-semibold">86%</p>
-								<p class="mt-1 text-xs text-chart-3">On track this week</p>
-							</div>
-						</div>
-						<div class="rounded-xl border border-border bg-background p-4">
-							<div class="mb-5 flex items-center justify-between">
-								<div>
-									<p class="text-sm font-medium">Weekly activity</p>
-									<p class="mt-1 text-xs text-muted-foreground">A little progress adds up</p>
-								</div>
-								<span class="rounded-md bg-accent px-2 py-1 text-xs text-accent-foreground">
-									This week
-								</span>
-							</div>
-							<div
-								class="flex h-32 items-end gap-2 sm:gap-3"
-								aria-label="Decorative weekly activity chart"
-							>
-								{#each [{ day: 'Mon', height: '48%' }, { day: 'Tue', height: '68%' }, { day: 'Wed', height: '56%' }, { day: 'Thu', height: '88%' }, { day: 'Fri', height: '72%' }, { day: 'Sat', height: '100%' }, { day: 'Sun', height: '62%' }] as bar (bar.day)}
-									<div class="flex h-full flex-1 flex-col items-center justify-end gap-2">
-										<div
-											class="w-full rounded-t-md bg-primary/80 transition hover:bg-primary"
-											style={`height:${bar.height}`}
-										></div>
-										<span class="text-[10px] text-muted-foreground">{bar.day}</span>
-									</div>
-								{/each}
-							</div>
-						</div>
-						<div class="flex items-center gap-3 rounded-xl bg-accent/60 p-4">
-							<div
-								class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background text-primary"
-							>
-								<ShieldCheckIcon class="size-4" />
-							</div>
-							<div>
-								<p class="text-sm font-medium">Everything in one place</p>
-								<p class="mt-0.5 text-xs text-muted-foreground">
-									A clear view of work and what comes next.
-								</p>
-							</div>
+					<h1
+						class="text-balance text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl"
+					>
+						Pantau cucian dari timbang sampai <span class="text-primary">siap ambil.</span>
+					</h1>
+
+					<p class="max-w-xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
+						Pelanggan cukup masukkan kode order atau pindai QR di nota untuk melacak 6 tahap proses
+						cucian. Kasir dan admin kelola order, tarif bertingkat, dan pembayaran dalam satu
+						dashboard.
+					</p>
+
+					<!-- Quick Tracking Form -->
+					<Card.Root class="w-full max-w-xl shadow-sm">
+						<Card.Header class="pb-3">
+							<Card.Title class="text-base">Lacak Status Cucian Sekarang</Card.Title>
+							<Card.Description>
+								Masukkan kode order yang tertera pada struk nota atau pesan WhatsApp Anda.
+							</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							<form method="GET" action="/cek" class="flex flex-col gap-3 sm:flex-row">
+								<Field.Field class="flex-1">
+									<Field.FieldLabel for="hero-order-code" class="sr-only">
+										Kode Order
+									</Field.FieldLabel>
+									<InputGroup.Root class="h-10">
+										<InputGroup.Addon align="inline-start">
+											<SearchIcon />
+										</InputGroup.Addon>
+										<InputGroup.Input
+											id="hero-order-code"
+											name="code"
+											bind:value={orderCode}
+											placeholder="Contoh: LN-261125-0001"
+											autocomplete="off"
+											autocapitalize="characters"
+											class="font-mono uppercase tracking-wide"
+											required
+										/>
+									</InputGroup.Root>
+								</Field.Field>
+								<Button type="submit" class="h-10 px-5">
+									Lacak Order
+									<ArrowRightIcon data-icon="inline-end" />
+								</Button>
+							</form>
+						</Card.Content>
+						<Card.Footer
+							class="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground"
+						>
+							<span>Verifikasi aman menggunakan 4 digit terakhir WhatsApp.</span>
+							<a href="/cek" class="font-medium text-primary underline-offset-4 hover:underline">
+								Buka halaman cek →
+							</a>
+						</Card.Footer>
+					</Card.Root>
+
+					<div class="flex flex-wrap items-center gap-3 pt-1">
+						{#if data.isLoggedIn}
+							<Button variant="outline" href="/dashboard">
+								<LayoutDashboardIcon data-icon="inline-start" />
+								Ke Dashboard{data.userName ? ` (${data.userName})` : ''}
+							</Button>
+						{:else}
+							<Button variant="outline" href="/login">
+								Masuk Dashboard Staf
+								<ArrowRightIcon data-icon="inline-end" />
+							</Button>
+						{/if}
+						<div
+							class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground sm:text-sm"
+						>
+							<span class="inline-flex items-center gap-1.5">
+								<CheckIcon class="size-4 text-primary" />
+								6 tahap terpantau
+							</span>
+							<span class="inline-flex items-center gap-1.5">
+								<CheckIcon class="size-4 text-primary" />
+								Struk QR otomatis
+							</span>
+							<span class="inline-flex items-center gap-1.5">
+								<CheckIcon class="size-4 text-primary" />
+								Tanpa instal aplikasi
+							</span>
 						</div>
 					</div>
 				</div>
-				<div
-					class="absolute -bottom-5 -left-5 hidden items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-lg sm:flex"
-				>
-					<span class="flex size-9 items-center justify-center rounded-lg bg-accent text-primary">
-						<CheckIcon class="size-4" />
-					</span><span>
-						<span class="block text-sm font-medium">Ready when you are</span><span
-							class="text-xs text-muted-foreground"
-						>
-							Thoughtful defaults, zero fuss
-						</span>
-					</span>
+
+				<!-- Live Tracking Preview Card -->
+				<div class="relative mx-auto w-full max-w-lg lg:ml-auto">
+					<div class="absolute -inset-4 rounded-3xl bg-primary/10 blur-2xl"></div>
+					<Card.Root class="relative shadow-xl">
+						<Card.Header class="border-b pb-4">
+							<div class="flex items-start justify-between gap-3">
+								<div class="flex flex-col gap-1">
+									<span class="text-xs font-medium text-muted-foreground">
+										Pratinjau Pelacakan Nota
+									</span>
+									<Card.Title class="font-mono text-lg tracking-wide">LN-261125-0014</Card.Title>
+									<Card.Description>Pelanggan: Rina · Estimasi selesai hari ini</Card.Description>
+								</div>
+								<div class="flex flex-col items-end gap-1.5">
+									<Badge>Sedang Disetrika</Badge>
+									<Badge variant="secondary">Lunas</Badge>
+								</div>
+							</div>
+							<div class="mt-4 flex flex-col gap-1.5">
+								<div class="flex items-center justify-between text-xs">
+									<span class="text-muted-foreground">Progres cucian</span>
+									<span class="font-semibold tabular-nums">67%</span>
+								</div>
+								<Progress value={67} class="h-2" />
+							</div>
+						</Card.Header>
+						<Card.Content class="flex flex-col gap-3 pt-4">
+							{#each PREVIEW_STEPS as step (step.key)}
+								{@const StepIcon = step.icon}
+								<div
+									class={cn(
+										'flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm',
+										step.active
+											? 'border-primary/40 bg-accent/60'
+											: step.done
+												? 'border-border bg-background'
+												: 'border-border/60 bg-muted/30 text-muted-foreground'
+									)}
+								>
+									<div class="flex items-center gap-2.5">
+										<span
+											class={cn(
+												'flex size-7 shrink-0 items-center justify-center rounded-full',
+												step.active
+													? 'bg-primary text-primary-foreground'
+													: step.done
+														? 'bg-accent text-primary'
+														: 'bg-muted text-muted-foreground'
+											)}
+										>
+											<StepIcon class="size-3.5" />
+										</span>
+										<span class={cn('font-medium', step.active && 'text-foreground')}>
+											{step.label}
+										</span>
+									</div>
+									<span class="text-xs text-muted-foreground tabular-nums">{step.time}</span>
+								</div>
+							{/each}
+						</Card.Content>
+						<Card.Footer class="flex items-center justify-between border-t pt-4 text-sm">
+							<div class="flex flex-col">
+								<span class="text-xs text-muted-foreground">Cuci Komplit Express · 4.5 kg</span>
+								<span class="font-semibold tabular-nums">Rp31.500</span>
+							</div>
+							<Button variant="outline" size="sm" href="/cek">
+								<ClockIcon data-icon="inline-start" />
+								Coba Lacak
+							</Button>
+						</Card.Footer>
+					</Card.Root>
 				</div>
 			</div>
 		</section>
 
-		<section id="features" class="border-y border-border/70 bg-card/60">
-			<div class="mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-24">
-				<div class="mx-auto max-w-2xl text-center">
-					<p class="text-sm font-semibold uppercase tracking-[0.16em] text-primary">
-						A head start, not a shortcut
-					</p>
-					<h2 class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-						The foundation, already figured out.
+		<Separator />
+
+		<!-- How it works -->
+		<section id="cara-kerja" class="bg-muted/30">
+			<div
+				class="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-16 sm:px-8 lg:px-10 lg:py-20"
+			>
+				<div class="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
+					<Badge variant="outline">Alur Kerja KiloTrack</Badge>
+					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+						Pelanggan tenang, operasional outlet lebih rapi.
 					</h2>
-					<p class="mt-4 leading-7 text-muted-foreground">
-						Spend less time wiring the basics together and more time making something people love.
+					<p class="text-muted-foreground">
+						Dirancang untuk kebutuhan laundry kiloan dan satuan: dari penerimaan order di kasir
+						hingga pengambilan cucian.
 					</p>
 				</div>
-				<div class="mt-12 grid gap-4 md:grid-cols-3">
-					{#each [{ icon: ShieldCheckIcon, title: 'Authentication that fits', description: 'A working Better Auth foundation with protected routes and a clear sign-in flow.' }, { icon: Layers3Icon, title: 'Components you can own', description: 'Accessible shadcn-svelte components live in your codebase, ready for your design.' }, { icon: ZapIcon, title: 'A dashboard that scales', description: 'A responsive workspace layout that gives your product room to grow.' }] as feature (feature.title)}
-						<article
-							class="rounded-2xl border border-border bg-background p-6 shadow-xs transition hover:-translate-y-1 hover:shadow-md"
-						>
-							<div
-								class="flex size-11 items-center justify-center rounded-xl bg-accent text-primary"
-							>
-								<feature.icon class="size-5" />
-							</div>
-							<h3 class="mt-5 text-lg font-semibold">{feature.title}</h3>
-							<p class="mt-2 text-sm leading-6 text-muted-foreground">{feature.description}</p>
-						</article>
+
+				<div class="grid gap-5 md:grid-cols-3">
+					{#each WORKFLOW_HIGHLIGHTS as item (item.step)}
+						{@const ItemIcon = item.icon}
+						<Card.Root class="transition-shadow hover:shadow-md">
+							<Card.Header>
+								<div class="flex items-center justify-between gap-2">
+									<div
+										class="flex size-10 items-center justify-center rounded-xl bg-accent text-primary"
+									>
+										<ItemIcon class="size-5" />
+									</div>
+									<Badge variant="secondary" class="font-mono">{item.step}</Badge>
+								</div>
+								<Card.Title class="mt-3 text-lg">{item.title}</Card.Title>
+								<Card.Description class="leading-6">{item.description}</Card.Description>
+							</Card.Header>
+						</Card.Root>
 					{/each}
 				</div>
 			</div>
 		</section>
 
+		<Separator />
+
+		<!-- Active Services & Pricing -->
 		<section
-			class="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-6 py-16 sm:flex-row sm:items-center lg:px-10 lg:py-20"
+			id="layanan"
+			class="mx-auto flex w-full max-w-7xl flex-col gap-10 px-5 py-16 sm:px-8 lg:px-10 lg:py-20"
 		>
-			<div>
-				<h2 class="text-2xl font-semibold tracking-tight">
-					Your next idea deserves a great start.
-				</h2>
-				<p class="mt-2 text-muted-foreground">Take the first step. The foundation is ready.</p>
+			<div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+				<div class="flex max-w-2xl flex-col gap-2">
+					<Badge variant="outline" class="w-fit">Daftar Layanan Aktif</Badge>
+					<h2 class="text-3xl font-bold tracking-tight sm:text-4xl">
+						Layanan &amp; Tarif Transparan
+					</h2>
+					<p class="text-muted-foreground">
+						Harga dihitung otomatis sesuai berat atau jumlah item beserta paket minimum yang
+						berlaku.
+					</p>
+				</div>
+				<Button variant="outline" href="/cek" class="w-fit">
+					Sudah punya nota? Cek status
+					<ArrowRightIcon data-icon="inline-end" />
+				</Button>
 			</div>
-			<Button href="/login" size="lg" class="gap-2 rounded-xl px-6">
-				Create your workspace <ArrowRightIcon class="size-4" />
-			</Button>
+
+			{#if data.services.length > 0}
+				<div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+					{#each data.services as service (service.id)}
+						<Card.Root class="flex flex-col">
+							<Card.Header>
+								<div class="flex items-start justify-between gap-2">
+									<Card.Title class="text-lg">{service.name}</Card.Title>
+									<Badge variant="secondary">per {service.unit}</Badge>
+								</div>
+								<Card.Description>
+									{service.description || `Layanan laundry dihitung per ${service.unit}.`}
+								</Card.Description>
+							</Card.Header>
+							<Card.Content class="flex flex-1 flex-col gap-2">
+								{#if service.priceItems.length > 0}
+									{#each service.priceItems as tier (tier.id)}
+										<div
+											class="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm"
+										>
+											<span class="text-muted-foreground">
+												{tier.minQty > 0 ? `Min. ${tier.minQty} ${service.unit}` : `Tarif dasar`}
+											</span>
+											<span class="font-semibold tabular-nums">
+												{formatRupiah(tier.price)}/{service.unit}
+											</span>
+										</div>
+									{/each}
+								{:else}
+									<p class="text-sm text-muted-foreground">
+										Hubungi kasir untuk informasi tarif layanan ini.
+									</p>
+								{/if}
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{:else}
+				<Empty.Root class="border">
+					<Empty.Header>
+						<Empty.Media variant="icon">
+							<ShirtIcon />
+						</Empty.Media>
+						<Empty.Title>Daftar layanan belum tersedia</Empty.Title>
+						<Empty.Description>
+							Staf outlet dapat menambahkan kategori layanan dan tarif bertingkat melalui dashboard.
+						</Empty.Description>
+					</Empty.Header>
+					<Empty.Content>
+						<Button href={data.isLoggedIn ? '/dashboard/services' : '/login'}>
+							{data.isLoggedIn ? 'Atur Layanan' : 'Masuk Staf'}
+						</Button>
+					</Empty.Content>
+				</Empty.Root>
+			{/if}
+		</section>
+
+		<Separator />
+
+		<!-- Bottom CTA -->
+		<section class="mx-auto w-full max-w-7xl px-5 py-14 sm:px-8 lg:px-10 lg:py-16">
+			<Card.Root class="bg-muted/40">
+				<Card.Content
+					class="flex flex-col items-start justify-between gap-6 p-6 sm:flex-row sm:items-center sm:p-8"
+				>
+					<div class="flex flex-col gap-1.5">
+						<h2 class="text-2xl font-bold tracking-tight">Siap mengecek atau mengelola cucian?</h2>
+						<p class="text-sm text-muted-foreground sm:text-base">
+							Pelanggan bisa langsung lacak order dari nota, sementara kasir bisa masuk ke dashboard
+							operasional.
+						</p>
+					</div>
+					<div class="flex flex-wrap items-center gap-3">
+						<Button href="/cek">
+							<SearchIcon data-icon="inline-start" />
+							Cek Status Cucian
+						</Button>
+						<Button variant="outline" href={data.isLoggedIn ? '/dashboard' : '/login'}>
+							{data.isLoggedIn ? 'Buka Dashboard' : 'Masuk Staf'}
+						</Button>
+					</div>
+				</Card.Content>
+			</Card.Root>
 		</section>
 	</main>
+
 	<footer class="border-t border-border">
 		<div
-			class="mx-auto flex max-w-7xl flex-col gap-2 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between lg:px-10"
+			class="mx-auto flex w-full max-w-7xl flex-col gap-3 px-5 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10"
 		>
-			<a href="/" class="font-medium text-foreground">SveltePlate</a><span>
-				Built for the things you’re about to build.
-			</span>
+			<a href="/" class="flex items-center gap-2 font-semibold text-foreground">
+				<ShirtIcon class="size-4 text-primary" />
+				KiloTrack
+			</a>
+			<div class="flex flex-wrap items-center gap-4">
+				<a href="/cek" class="transition-colors hover:text-foreground">Cek Status Cucian</a>
+				<a
+					href={data.isLoggedIn ? '/dashboard' : '/login'}
+					class="transition-colors hover:text-foreground"
+				>
+					{data.isLoggedIn ? 'Dashboard Staf' : 'Masuk Staf'}
+				</a>
+			</div>
 		</div>
 	</footer>
 </div>

@@ -19,23 +19,45 @@ const customerSchema = z.object({
 export const load: PageServerLoad = async (event) => {
 	await requireAdmin(event);
 	const q = event.url.searchParams.get('q')?.trim() ?? '';
+	const status = event.url.searchParams.get('status') ?? 'all';
+
 	const where: Record<string, unknown> = {};
+	const and: Record<string, unknown>[] = [];
 	if (q) {
-		where.OR = [
-			{ name: { contains: q, mode: 'insensitive' } },
-			{ whatsapp: { contains: q, mode: 'insensitive' } }
-		];
+		and.push({
+			OR: [
+				{ name: { contains: q, mode: 'insensitive' } },
+				{ whatsapp: { contains: q, mode: 'insensitive' } }
+			]
+		});
 	}
-	const customers = await db.customer.findMany({
-		where,
-		include: {
-			orders: {
-				select: { id: true, orderCode: true, totalPrice: true, status: true, createdAt: true },
-				orderBy: { createdAt: 'desc' }
-			}
-		},
-		orderBy: { createdAt: 'desc' }
-	});
+	if (status === 'active') and.push({ isActive: true });
+	if (status === 'inactive') and.push({ isActive: false });
+	if (and.length) where.AND = and;
+
+	const [customers, totalCustomers, activeCustomers, totalOrders] = await Promise.all([
+		db.customer.findMany({
+			where,
+			include: {
+				orders: {
+					select: {
+						id: true,
+						orderCode: true,
+						totalPrice: true,
+						status: true,
+						paymentStatus: true,
+						createdAt: true
+					},
+					orderBy: { createdAt: 'desc' }
+				}
+			},
+			orderBy: { createdAt: 'desc' }
+		}),
+		db.customer.count(),
+		db.customer.count({ where: { isActive: true } }),
+		db.order.count({ where: { status: { not: 'dibatalkan' } } })
+	]);
+
 	return {
 		customers: customers.map((c) => ({
 			...c,
@@ -45,7 +67,13 @@ export const load: PageServerLoad = async (event) => {
 				.reduce((sum, o) => sum + o.totalPrice, 0),
 			orders: c.orders.map((o) => ({ ...o, totalPrice: o.totalPrice }))
 		})),
-		q
+		stats: {
+			totalCustomers,
+			activeCustomers,
+			totalOrders
+		},
+		q,
+		status
 	};
 };
 
@@ -65,7 +93,6 @@ export const actions: Actions = {
 		if (waError) {
 			return fail(400, { action: 'createCustomer', errors: { whatsapp: [waError] } });
 		}
-		// duplicate check
 		if (whatsapp) {
 			const existing = await db.customer.findUnique({ where: { whatsapp } });
 			if (existing) {
@@ -85,7 +112,7 @@ export const actions: Actions = {
 			}
 			return fail(500, { action: 'createCustomer', message: 'Gagal menyimpan customer' });
 		}
-		return { success: true, action: 'createCustomer' };
+		return { success: true, action: 'createCustomer', info: 'Customer baru berhasil ditambahkan' };
 	},
 
 	updateCustomer: async (event) => {
@@ -123,7 +150,25 @@ export const actions: Actions = {
 			}
 			return fail(500, { action: 'updateCustomer', message: 'Gagal memperbarui customer' });
 		}
-		return { success: true, action: 'updateCustomer' };
+		return { success: true, action: 'updateCustomer', info: 'Data customer diperbarui' };
+	},
+
+	toggleCustomer: async (event) => {
+		await requireAdmin(event);
+		const form = await event.request.formData();
+		const id = String(form.get('id') ?? '');
+		const isActive = String(form.get('isActive') ?? '') === 'true';
+		if (!id) return fail(400, { action: 'toggleCustomer', message: 'ID tidak valid' });
+		try {
+			await db.customer.update({ where: { id }, data: { isActive } });
+		} catch {
+			return fail(500, { action: 'toggleCustomer', message: 'Gagal mengubah status customer' });
+		}
+		return {
+			success: true,
+			action: 'toggleCustomer',
+			info: isActive ? 'Customer diaktifkan kembali' : 'Customer dinonaktifkan'
+		};
 	},
 
 	deleteCustomer: async (event) => {
@@ -135,12 +180,18 @@ export const actions: Actions = {
 			where: { id },
 			include: { _count: { select: { orders: true } } }
 		});
-		if (!customer) return fail(404, { action: 'deleteCustomer', message: 'Customer tidak ditemukan' });
+		if (!customer) {
+			return fail(404, { action: 'deleteCustomer', message: 'Customer tidak ditemukan' });
+		}
 		if (customer._count.orders > 0) {
 			await db.customer.update({ where: { id }, data: { isActive: false } });
-			return { success: true, action: 'deleteCustomer', message: 'Customer dinonaktifkan karena memiliki riwayat order' };
+			return {
+				success: true,
+				action: 'deleteCustomer',
+				info: 'Customer dinonaktifkan karena memiliki riwayat order'
+			};
 		}
 		await db.customer.delete({ where: { id } });
-		return { success: true, action: 'deleteCustomer' };
+		return { success: true, action: 'deleteCustomer', info: 'Customer berhasil dihapus' };
 	}
 };

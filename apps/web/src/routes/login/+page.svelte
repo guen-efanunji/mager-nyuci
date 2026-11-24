@@ -1,71 +1,126 @@
 <script lang="ts">
-	import GalleryVerticalEndIcon from '@lucide/svelte/icons/gallery-vertical-end';
+	import { toggleMode } from 'mode-watcher';
+	import MoonIcon from '@lucide/svelte/icons/moon';
+	import QrCodeIcon from '@lucide/svelte/icons/qr-code';
+	import ReceiptIcon from '@lucide/svelte/icons/receipt';
+	import ShirtIcon from '@lucide/svelte/icons/shirt';
+	import SunIcon from '@lucide/svelte/icons/sun';
+	import WashingMachineIcon from '@lucide/svelte/icons/washing-machine';
 	import LoginForm from '#lib/components/login-form.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+
+	const STAFF_PILLARS = [
+		{
+			icon: ReceiptIcon,
+			title: 'Kasir & Tarif Bertingkat',
+			description: 'Hitung otomatis kiloan maupun satuan sesuai minimum qty.'
+		},
+		{
+			icon: WashingMachineIcon,
+			title: 'Papan Proses 6 Tahap',
+			description: 'Perbarui status cucian dari Diterima hingga Siap Diambil.'
+		},
+		{
+			icon: QrCodeIcon,
+			title: 'Nota & QR Pelacakan',
+			description: 'Pelanggan pantau cucian sendiri tanpa perlu chat admin.'
+		}
+	] as const;
 </script>
 
 <svelte:head>
-	<title>Sign in — SveltePlate</title>
-	<meta name="description" content="Sign in or create your SveltePlate account." />
+	<title>Masuk Staf — KiloTrack</title>
+	<meta
+		name="description"
+		content="Masuk atau buat akun staf untuk mengelola order, proses cucian, layanan, dan pelanggan di KiloTrack."
+	/>
 </svelte:head>
 
-<div class="grid min-h-svh lg:grid-cols-2">
-	<section class="flex flex-col gap-4 p-6 md:p-10">
-		<a
-			href="/"
-			class="flex items-center gap-2 self-center font-semibold tracking-tight md:self-start"
-		>
-			<span
-				class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+<div class="grid min-h-svh bg-background lg:grid-cols-2">
+	<section class="flex flex-col gap-6 p-6 md:p-10">
+		<div class="flex items-center justify-between gap-4">
+			<a href="/" class="flex items-center gap-2.5" aria-label="Beranda KiloTrack">
+				<span
+					class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs"
+				>
+					<ShirtIcon class="size-5" />
+				</span>
+				<span class="flex flex-col leading-tight">
+					<span class="text-base font-bold tracking-tight">KiloTrack</span>
+					<span class="text-[11px] text-muted-foreground">Portal Staf &amp; Kasir</span>
+				</span>
+			</a>
+
+			<Button
+				variant="outline"
+				size="icon"
+				class="relative"
+				onclick={toggleMode}
+				aria-label="Ubah tema warna"
 			>
-				<GalleryVerticalEndIcon class="size-4" />
-			</span>
-			SveltePlate
-		</a>
-		<div class="flex flex-1 items-center justify-center py-8">
-			<div class="w-full max-w-sm"><LoginForm /></div>
+				<SunIcon class="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+				<MoonIcon class="absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+				<span class="sr-only">Ubah tema</span>
+			</Button>
+		</div>
+
+		<div class="flex flex-1 items-center justify-center py-4">
+			<div class="w-full max-w-md">
+				<LoginForm />
+			</div>
 		</div>
 	</section>
+
 	<aside
-		class="relative hidden overflow-hidden bg-primary lg:block"
-		aria-label="SveltePlate workspace preview"
+		class="relative hidden overflow-hidden bg-primary text-primary-foreground lg:block"
+		aria-label="Ringkasan operasional KiloTrack"
 	>
 		<div
-			class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,oklch(0.72_0.13_270_/_0.8),transparent_52%),linear-gradient(145deg,oklch(0.31_0.16_270),oklch(0.2_0.09_275))]"
+			class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,oklch(0.76_0.12_258_/_0.35),transparent_55%),linear-gradient(155deg,oklch(0.45_0.17_258),oklch(0.28_0.11_260))]"
 		></div>
-		<div class="absolute -right-24 top-20 size-96 rounded-full border border-white/10"></div>
-		<div class="absolute -right-10 top-34 size-72 rounded-full border border-white/10"></div>
-		<div
-			class="relative flex h-full min-h-[520px] flex-col p-10 text-primary-foreground md:p-12 xl:p-16"
-		>
-			<div class="flex flex-1 flex-col justify-center">
-				<div class="max-w-lg">
-					<p class="text-sm font-medium text-white/65">A good place to begin</p>
-					<h2 class="mt-4 text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
-						Make room for your next big idea.
+		<div class="absolute -right-24 top-16 size-96 rounded-full border border-white/10"></div>
+		<div class="absolute -right-10 top-32 size-72 rounded-full border border-white/10"></div>
+
+		<div class="relative flex h-full flex-col justify-between p-12 xl:p-16">
+			<div class="flex flex-1 flex-col justify-center gap-8">
+				<div class="flex max-w-lg flex-col gap-4">
+					<Badge
+						variant="secondary"
+						class="w-fit border border-white/15 bg-white/10 text-white hover:bg-white/15"
+					>
+						Operasional Outlet Laundry
+					</Badge>
+					<h2 class="text-4xl font-bold leading-tight tracking-tight xl:text-5xl">
+						Kelola order dan proses cucian dalam satu tempat.
 					</h2>
-					<p class="mt-5 max-w-md leading-7 text-white/70">
-						Your tools, your workflow, your product. Start with a foundation that gets out of your
-						way.
+					<p class="max-w-md text-base leading-7 text-white/75">
+						Catat cucian masuk dengan cepat, perbarui progres 6 tahap secara real-time, dan beri
+						pelanggan akses pelacakan langsung dari struk nota.
 					</p>
 				</div>
+
 				<div
-					class="mt-10 max-w-lg rounded-2xl border border-white/15 bg-white/10 p-5 shadow-xl backdrop-blur-sm"
+					class="flex max-w-lg flex-col gap-3 rounded-2xl border border-white/15 bg-white/10 p-5 shadow-xl backdrop-blur-sm"
 				>
-					<div class="flex items-center gap-3">
-						<span class="flex size-10 items-center justify-center rounded-xl bg-white/15">
-							<GalleryVerticalEndIcon class="size-5" />
-						</span>
-						<div>
-							<p class="text-sm font-semibold">A workspace built around you</p>
-							<p class="mt-1 text-xs text-white/65">Everything starts with one small step.</p>
+					{#each STAFF_PILLARS as item (item.title)}
+						{@const ItemIcon = item.icon}
+						<div class="flex items-start gap-3 rounded-xl bg-white/10 p-3.5">
+							<span
+								class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white"
+							>
+								<ItemIcon class="size-4" />
+							</span>
+							<div class="flex flex-col gap-0.5">
+								<p class="text-sm font-semibold text-white">{item.title}</p>
+								<p class="text-xs leading-5 text-white/75">{item.description}</p>
+							</div>
 						</div>
-					</div>
-					<div class="mt-5 h-1.5 overflow-hidden rounded-full bg-white/15">
-						<div class="h-full w-2/3 rounded-full bg-white/80"></div>
-					</div>
+					{/each}
 				</div>
 			</div>
-			<p class="mt-8 text-xs text-white/50">SveltePlate · Start with clarity</p>
+
+			<p class="text-xs text-white/60">KiloTrack · Sistem Manajemen &amp; Pelacakan Laundry</p>
 		</div>
 	</aside>
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
 	import { formatRupiah } from '#lib/utils.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -7,48 +8,96 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import PlusIcon from '@lucide/svelte/icons/plus';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+	import LayersIcon from '@lucide/svelte/icons/layers';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import PlusIcon from '@lucide/svelte/icons/plus';
 	import PowerIcon from '@lucide/svelte/icons/power';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import TagIcon from '@lucide/svelte/icons/tag';
+	import XIcon from '@lucide/svelte/icons/x';
 
 	let { data, form } = $props();
 
+	type PriceItemData = (typeof data.categories)[number]['priceItems'][number];
+	type CategoryData = (typeof data.categories)[number];
+
+	let searchQuery = $derived(data.q ?? '');
 	let createCategoryOpen = $state(false);
-	let editCategory = $state<any>(null);
-	let priceDialog = $state<{ open: boolean; categoryId: string; item: any | null }>({
+	let createUnit = $state<'kg' | 'pcs'>('kg');
+
+	let editCategory = $state<CategoryData | null>(null);
+	let editUnit = $state<'kg' | 'pcs'>('kg');
+	let editActive = $state<'true' | 'false'>('true');
+
+	let priceDialog = $state<{
+		open: boolean;
+		category: CategoryData | null;
+		item: PriceItemData | null;
+	}>({
 		open: false,
-		categoryId: '',
+		category: null,
 		item: null
 	});
+	let priceValue = $state('');
 
 	let confirmOpen = $state(false);
-	let deactivateTarget = $state<{ type: 'category' | 'price'; id: string; name: string; isActive: boolean } | null>(null);
-	let priceValue = $state('');
+	let deactivateTarget = $state<{
+		type: 'category' | 'price';
+		id: string;
+		name: string;
+		isActive: boolean;
+	} | null>(null);
+
+	let submitting = $state(false);
+
+	$effect(() => {
+		if (editCategory) {
+			editUnit = editCategory.unit === 'pcs' ? 'pcs' : 'kg';
+			editActive = editCategory.isActive ? 'true' : 'false';
+		}
+	});
+
+	$effect(() => {
+		if (priceDialog.open) priceValue = String(priceDialog.item?.price ?? '');
+	});
 
 	const closeAll = () => {
 		createCategoryOpen = false;
+		createUnit = 'kg';
 		editCategory = null;
-		priceDialog = { open: false, categoryId: '', item: null };
+		priceDialog = { open: false, category: null, item: null };
 		confirmOpen = false;
 		deactivateTarget = null;
 	};
 
 	const handleEnhance = () => {
-		return async ({ result, update }: { result: any; update: () => Promise<void> }) => {
-			if (result.type === 'success') closeAll();
-			await update();
+		submitting = true;
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: () => Promise<void>;
+		}) => {
+			try {
+				if (result.type === 'success') closeAll();
+				await update();
+			} finally {
+				submitting = false;
+			}
 		};
 	};
 
 	$effect(() => {
-		if (form?.success) toast.success('Berhasil disimpan');
+		if (form?.success) toast.success('Perubahan berhasil disimpan');
 		if (form?.message) toast.error(form.message);
 		if (form?.errors) {
 			const first = Object.values(form.errors)[0];
@@ -56,15 +105,16 @@
 		}
 	});
 
-	function openPriceDialog(categoryId: string, item: any = null) {
-		priceDialog = { open: true, categoryId, item };
+	function openPriceDialog(category: CategoryData, item: PriceItemData | null = null) {
+		priceDialog = { open: true, category, item };
 	}
 
-	$effect(() => {
-		if (priceDialog.open) priceValue = String(priceDialog.item?.price ?? '');
-	});
-
-	function askDeactivate(target: { type: 'category' | 'price'; id: string; name: string; isActive: boolean }) {
+	function askDeactivate(target: {
+		type: 'category' | 'price';
+		id: string;
+		name: string;
+		isActive: boolean;
+	}) {
 		deactivateTarget = target;
 		confirmOpen = true;
 	}
@@ -72,6 +122,22 @@
 	function unitLabel(u: string) {
 		return u === 'kg' ? 'kg' : 'pcs';
 	}
+
+	function buildFilterUrl(status: string, q = searchQuery) {
+		const params = new SvelteURLSearchParams();
+		if (q.trim()) params.set('q', q.trim());
+		if (status !== 'all') params.set('status', status);
+		const qs = params.toString();
+		return qs ? `/dashboard/services?${qs}` : '/dashboard/services';
+	}
+
+	const hasActiveFilter = $derived(Boolean(data.q) || data.status !== 'all');
+
+	const STATUS_TABS = [
+		{ key: 'all', label: 'Semua' },
+		{ key: 'active', label: 'Aktif' },
+		{ key: 'inactive', label: 'Nonaktif' }
+	] as const;
 </script>
 
 <svelte:head>
@@ -82,220 +148,418 @@
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
 			<h1 class="text-2xl font-bold tracking-tight">Layanan & Harga</h1>
-			<p class="text-sm text-muted-foreground">Kelola kategori layanan dan daftar harga bertingkat.</p>
+			<p class="text-sm text-muted-foreground">
+				Kelola kategori layanan laundry beserta daftar paket tarif bertingkat.
+			</p>
 		</div>
-		<Button onclick={() => (createCategoryOpen = true)} class="gap-2">
-			<PlusIcon class="size-4" /> Kategori
+		<Button onclick={() => (createCategoryOpen = true)} class="gap-2 self-start sm:self-auto">
+			<PlusIcon class="size-4" />
+			Kategori Baru
 		</Button>
 	</div>
 
-	<Card.Root>
-		<Card.Content class="p-4">
-			<form method="GET" action="/dashboard/services" class="flex flex-col gap-3 sm:flex-row">
-				<div class="relative flex-1">
-					<SearchIcon class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input name="q" value={data.q} placeholder="Cari nama kategori..." class="pl-9" />
+	<!-- Ringkasan -->
+	<div class="grid gap-3 sm:grid-cols-3">
+		<Card.Root>
+			<Card.Content class="flex items-center justify-between p-4">
+				<div>
+					<p class="text-xs font-medium text-muted-foreground">Total Kategori</p>
+					<p class="mt-1 text-2xl font-bold tabular-nums">{data.stats.totalCategories}</p>
 				</div>
-				<Select.Root type="single" name="status" value={data.status}>
-					<Select.Trigger class="w-full sm:w-44">
-						{data.status === 'active' ? 'Aktif' : data.status === 'inactive' ? 'Nonaktif' : 'Semua status'}
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Item value="all">Semua status</Select.Item>
-						<Select.Item value="active">Aktif</Select.Item>
-						<Select.Item value="inactive">Nonaktif</Select.Item>
-					</Select.Content>
-				</Select.Root>
-				<Button type="submit" variant="secondary">Cari</Button>
-			</form>
-		</Card.Content>
-	</Card.Root>
+				<div class="flex size-9 items-center justify-center rounded-lg bg-muted text-foreground">
+					<LayersIcon class="size-4" />
+				</div>
+			</Card.Content>
+		</Card.Root>
 
+		<Card.Root>
+			<Card.Content class="flex items-center justify-between p-4">
+				<div>
+					<p class="text-xs font-medium text-muted-foreground">Kategori Aktif</p>
+					<p class="mt-1 text-2xl font-bold tabular-nums">{data.stats.activeCategories}</p>
+				</div>
+				<div
+					class="flex size-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+				>
+					<CircleCheckIcon class="size-4" />
+				</div>
+			</Card.Content>
+		</Card.Root>
+
+		<Card.Root>
+			<Card.Content class="flex items-center justify-between p-4">
+				<div>
+					<p class="text-xs font-medium text-muted-foreground">Paket Tarif Aktif</p>
+					<p class="mt-1 text-2xl font-bold tabular-nums">{data.stats.totalPriceItems}</p>
+				</div>
+				<div
+					class="flex size-9 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+				>
+					<TagIcon class="size-4" />
+				</div>
+			</Card.Content>
+		</Card.Root>
+	</div>
+
+	<!-- Filter & Pencarian -->
 	<Card.Root>
-		<Card.Content class="p-0">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Nama Kategori</Table.Head>
-						<Table.Head>Satuan</Table.Head>
-						<Table.Head>Rentang Harga</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head class="text-right">Aksi</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#if data.categories.length === 0}
-						<Table.Row>
-							<Table.Cell colspan={5} class="py-10 text-center text-muted-foreground">
-								Belum ada kategori layanan.
-							</Table.Cell>
-						</Table.Row>
+		<Card.Content class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+			<form method="GET" action="/dashboard/services" class="flex flex-1 gap-2">
+				<input type="hidden" name="status" value={data.status} />
+				<div class="relative flex-1">
+					<SearchIcon
+						class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+					/>
+					<Input
+						name="q"
+						bind:value={searchQuery}
+						placeholder="Cari nama kategori layanan..."
+						class="pr-9 pl-9"
+					/>
+					{#if searchQuery}
+						<a
+							href={buildFilterUrl(data.status, '')}
+							aria-label="Hapus pencarian"
+							class="absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+						>
+							<XIcon class="size-3.5" />
+						</a>
 					{/if}
-					{#each data.categories as category (category.id)}
-						<Table.Row>
-							<Table.Cell>
-								<div class="font-medium">{category.name}</div>
-								{#if category.description}
-									<div class="text-xs text-muted-foreground">{category.description}</div>
-								{/if}
-							</Table.Cell>
-							<Table.Cell>
-								<Badge variant="outline">{unitLabel(category.unit)}</Badge>
-							</Table.Cell>
-							<Table.Cell class="text-sm">
-								{#if category.priceItems.length}
-									{category.priceItems[0].minQty}{unitLabel(category.unit)} — {formatRupiah(category.priceItems[category.priceItems.length - 1].price)}
-								{:else}
-									<span class="text-muted-foreground">Belum ada harga</span>
-								{/if}
-							</Table.Cell>
-							<Table.Cell>
-								<Badge variant={category.isActive ? 'default' : 'secondary'}>
-									{category.isActive ? 'Aktif' : 'Nonaktif'}
-								</Badge>
-							</Table.Cell>
-							<Table.Cell class="text-right">
-								<div class="flex justify-end gap-2">
-									<Button variant="ghost" size="sm" onclick={() => (editCategory = category)}>
-										<PencilIcon class="size-4" />
-									</Button>
-									<Button variant="ghost" size="sm" onclick={() => openPriceDialog(category.id)}>
-										<PlusIcon class="size-4" /> Harga
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										onclick={() =>
-											askDeactivate({
-												type: 'category',
-												id: category.id,
-												name: category.name,
-												isActive: category.isActive
-											})}
-									>
-										<PowerIcon class="size-4" />
-									</Button>
-								</div>
-							</Table.Cell>
-						</Table.Row>
+				</div>
+				<Button type="submit" variant="secondary">Cari</Button>
+				{#if hasActiveFilter}
+					<Button variant="ghost" href="/dashboard/services" class="gap-1 px-3">
+						<XIcon class="size-3.5" />
+						Reset
+					</Button>
+				{/if}
+			</form>
 
-						{#if category.priceItems.length}
-							<Table.Row class="bg-muted/30">
-								<Table.Cell colspan={5} class="py-2">
-									<div class="flex flex-wrap gap-2 pl-4">
-										{#each category.priceItems as item (item.id)}
-											<div class="flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm">
-												<span class="tabular-nums">{item.minQty} {unitLabel(category.unit)}</span>
-												<span class="font-medium">{formatRupiah(item.price)}</span>
-												{#if !item.isActive}
-													<Badge variant="secondary" class="text-xs">Nonaktif</Badge>
-												{/if}
-												<Button variant="ghost" size="sm" class="h-6 px-1" onclick={() => openPriceDialog(category.id, item)}>
-													<PencilIcon class="size-3" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													class="h-6 px-1"
-													onclick={() =>
-														askDeactivate({
-															type: 'price',
-															id: item.id,
-															name: `${item.minQty} ${unitLabel(category.unit)} — ${formatRupiah(item.price)}`,
-															isActive: item.isActive
-														})}
-												>
-													<PowerIcon class="size-3" />
-												</Button>
-											</div>
-										{/each}
-									</div>
-								</Table.Cell>
-							</Table.Row>
-						{/if}
-					{/each}
-				</Table.Body>
-			</Table.Root>
+			<div class="flex flex-wrap gap-1.5">
+				{#each STATUS_TABS as tab (tab.key)}
+					{@const active = data.status === tab.key}
+					<a
+						href={buildFilterUrl(tab.key)}
+						class="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors {active
+							? 'border-primary bg-primary text-primary-foreground'
+							: 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'}"
+					>
+						{tab.label}
+					</a>
+				{/each}
+			</div>
 		</Card.Content>
 	</Card.Root>
+
+	<!-- Daftar Kategori & Paket Harga -->
+	{#if data.categories.length === 0}
+		<Card.Root>
+			<Card.Content class="p-6">
+				<Empty.Root class="border-0 py-10">
+					<Empty.Media variant="icon">
+						<LayersIcon class="size-5" />
+					</Empty.Media>
+					<Empty.Header>
+						<Empty.Title>
+							{hasActiveFilter ? 'Kategori tidak ditemukan' : 'Belum ada kategori layanan'}
+						</Empty.Title>
+						<Empty.Description>
+							{hasActiveFilter
+								? 'Coba ubah kata kunci pencarian atau pilih filter status lain.'
+								: 'Tambahkan kategori seperti Cuci Komplit, Cuci Kering, atau Setrika Saja.'}
+						</Empty.Description>
+					</Empty.Header>
+					<Empty.Content>
+						<div class="flex flex-wrap justify-center gap-2">
+							{#if hasActiveFilter}
+								<Button variant="outline" href="/dashboard/services">Reset Filter</Button>
+							{/if}
+							<Button onclick={() => (createCategoryOpen = true)} class="gap-1.5">
+								<PlusIcon class="size-4" />
+								Tambah Kategori
+							</Button>
+						</div>
+					</Empty.Content>
+				</Empty.Root>
+			</Card.Content>
+		</Card.Root>
+	{:else}
+		<div class="grid gap-4">
+			{#each data.categories as category (category.id)}
+				{@const unit = unitLabel(category.unit)}
+				<Card.Root class={category.isActive ? '' : 'opacity-75'}>
+					<Card.Header class="border-b pb-4">
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+							<div class="space-y-1">
+								<div class="flex flex-wrap items-center gap-2">
+									<Card.Title class="text-base">{category.name}</Card.Title>
+									<Badge variant="outline" class="font-mono text-xs">{unit}</Badge>
+									<Badge variant={category.isActive ? 'default' : 'secondary'}>
+										{category.isActive ? 'Aktif' : 'Nonaktif'}
+									</Badge>
+								</div>
+								{#if category.description}
+									<Card.Description>{category.description}</Card.Description>
+								{:else}
+									<Card.Description class="italic">Belum ada deskripsi layanan</Card.Description>
+								{/if}
+							</div>
+
+							<div class="flex flex-wrap items-center gap-1.5">
+								<Button
+									variant="outline"
+									size="sm"
+									class="gap-1.5"
+									onclick={() => openPriceDialog(category)}
+								>
+									<PlusIcon class="size-3.5" />
+									Tambah Tarif
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="gap-1.5"
+									onclick={() => (editCategory = category)}
+								>
+									<PencilIcon class="size-3.5" />
+									Edit
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									class="gap-1.5 {category.isActive
+										? 'text-muted-foreground hover:text-destructive'
+										: 'text-emerald-700 hover:text-emerald-800 dark:text-emerald-400'}"
+									onclick={() =>
+										askDeactivate({
+											type: 'category',
+											id: category.id,
+											name: category.name,
+											isActive: category.isActive
+										})}
+								>
+									<PowerIcon class="size-3.5" />
+									<span class="hidden sm:inline">
+										{category.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+									</span>
+								</Button>
+							</div>
+						</div>
+					</Card.Header>
+
+					<Card.Content class="pt-4">
+						{#if category.priceItems.length === 0}
+							<div
+								class="flex flex-col items-center justify-between gap-2 rounded-lg border border-dashed bg-muted/20 px-4 py-4 text-center sm:flex-row sm:text-left"
+							>
+								<p class="text-sm text-muted-foreground">
+									Belum ada paket tarif untuk kategori ini. Layanan tidak bisa dipilih di kasir
+									sebelum tarif ditambahkan.
+								</p>
+								<Button
+									variant="secondary"
+									size="sm"
+									class="shrink-0 gap-1.5"
+									onclick={() => openPriceDialog(category)}
+								>
+									<PlusIcon class="size-3.5" />
+									Tambah Tarif
+								</Button>
+							</div>
+						{:else}
+							<div class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+								{#each category.priceItems as item (item.id)}
+									<div
+										class="flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 transition-colors {item.isActive
+											? 'bg-background'
+											: 'bg-muted/40 opacity-70'}"
+									>
+										<div class="min-w-0">
+											<div class="flex items-center gap-1.5">
+												<span class="text-xs font-medium text-muted-foreground tabular-nums">
+													Min. {item.minQty}
+													{unit}
+												</span>
+												{#if !item.isActive}
+													<Badge variant="secondary" class="h-4 px-1.5 text-[10px]">Nonaktif</Badge>
+												{/if}
+											</div>
+											<p class="mt-0.5 text-sm font-bold tabular-nums">
+												{formatRupiah(item.price)}
+												<span class="text-xs font-normal text-muted-foreground">/ {unit}</span>
+											</p>
+										</div>
+
+										<div class="flex shrink-0 items-center gap-0.5">
+											<Button
+												variant="ghost"
+												size="icon"
+												class="size-7"
+												aria-label="Edit tarif"
+												onclick={() => openPriceDialog(category, item)}
+											>
+												<PencilIcon class="size-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												class="size-7 {item.isActive
+													? 'text-muted-foreground hover:text-destructive'
+													: 'text-emerald-700'}"
+												aria-label={item.isActive ? 'Nonaktifkan tarif' : 'Aktifkan tarif'}
+												onclick={() =>
+													askDeactivate({
+														type: 'price',
+														id: item.id,
+														name: `${category.name} — Min. ${item.minQty} ${unit} (${formatRupiah(item.price)}/${unit})`,
+														isActive: item.isActive
+													})}
+											>
+												<PowerIcon class="size-3.5" />
+											</Button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <!-- Create Category Dialog -->
 <Dialog.Root bind:open={createCategoryOpen}>
-	<Dialog.Content>
+	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Kategori Baru</Dialog.Title>
+			<Dialog.Title>Kategori Layanan Baru</Dialog.Title>
+			<Dialog.Description>
+				Buat kategori layanan terlebih dahulu, lalu tambahkan paket harga bertingkatnya.
+			</Dialog.Description>
 		</Dialog.Header>
 		<form method="POST" action="?/createCategory" use:enhance={handleEnhance} class="space-y-4">
 			<div class="space-y-2">
-				<Label for="cc-name">Nama</Label>
-				<Input id="cc-name" name="name" required maxlength={100} />
+				<Label for="cc-name">Nama Kategori</Label>
+				<Input
+					id="cc-name"
+					name="name"
+					placeholder="Contoh: Cuci Komplit"
+					required
+					maxlength={100}
+				/>
 			</div>
 			<div class="space-y-2">
-				<Label for="cc-desc">Deskripsi</Label>
-				<Textarea id="cc-desc" name="description" rows={2} />
+				<Label for="cc-desc">Deskripsi (opsional)</Label>
+				<Textarea
+					id="cc-desc"
+					name="description"
+					placeholder="Cuci + kering + setrika + parfum"
+					rows={2}
+				/>
 			</div>
 			<div class="space-y-2">
-				<Label for="cc-unit">Satuan</Label>
-				<Select.Root type="single" name="unit" value="kg">
-					<Select.Trigger id="cc-unit" class="w-full">kg</Select.Trigger>
-					<Select.Content>
-						<Select.Item value="kg">kg</Select.Item>
-						<Select.Item value="pcs">pcs</Select.Item>
-					</Select.Content>
-				</Select.Root>
+				<Label>Satuan Hitung</Label>
+				<input type="hidden" name="unit" value={createUnit} />
+				<ToggleGroup.Root
+					type="single"
+					value={createUnit}
+					onValueChange={(v) => {
+						if (v === 'kg' || v === 'pcs') createUnit = v;
+					}}
+					variant="outline"
+					class="grid w-full grid-cols-2"
+				>
+					<ToggleGroup.Item value="kg">Kiloan (kg)</ToggleGroup.Item>
+					<ToggleGroup.Item value="pcs">Satuan (pcs)</ToggleGroup.Item>
+				</ToggleGroup.Root>
 			</div>
 			<input type="hidden" name="isActive" value="true" />
 			<Dialog.Footer>
-				<Button type="button" variant="secondary" onclick={() => (createCategoryOpen = false)}>Batal</Button>
-				<Button type="submit">Simpan</Button>
+				<Button type="button" variant="outline" onclick={() => (createCategoryOpen = false)}>
+					Batal
+				</Button>
+				<Button type="submit" disabled={submitting} class="gap-2">
+					{#if submitting}
+						<Spinner class="size-4" />
+					{/if}
+					Simpan Kategori
+				</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>
 </Dialog.Root>
 
 <!-- Edit Category Dialog -->
-<Dialog.Root open={!!editCategory} onOpenChange={(o) => { if (!o) editCategory = null; }}>
-	<Dialog.Content>
+<Dialog.Root
+	open={!!editCategory}
+	onOpenChange={(o) => {
+		if (!o) editCategory = null;
+	}}
+>
+	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Edit Kategori</Dialog.Title>
+			<Dialog.Description>Perbarui informasi dan status kategori layanan.</Dialog.Description>
 		</Dialog.Header>
 		{#if editCategory}
 			<form method="POST" action="?/updateCategory" use:enhance={handleEnhance} class="space-y-4">
 				<input type="hidden" name="id" value={editCategory.id} />
 				<div class="space-y-2">
-					<Label for="ec-name">Nama</Label>
+					<Label for="ec-name">Nama Kategori</Label>
 					<Input id="ec-name" name="name" value={editCategory.name} required maxlength={100} />
 				</div>
 				<div class="space-y-2">
-					<Label for="ec-desc">Deskripsi</Label>
-					<Textarea id="ec-desc" name="description" rows={2} value={editCategory.description ?? ''} />
+					<Label for="ec-desc">Deskripsi (opsional)</Label>
+					<Textarea
+						id="ec-desc"
+						name="description"
+						rows={2}
+						value={editCategory.description ?? ''}
+					/>
 				</div>
 				<div class="space-y-2">
-					<Label for="ec-unit">Satuan</Label>
-					<Select.Root type="single" name="unit" value={editCategory.unit}>
-						<Select.Trigger id="ec-unit" class="w-full">{editCategory.unit}</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="kg">kg</Select.Item>
-							<Select.Item value="pcs">pcs</Select.Item>
-						</Select.Content>
-					</Select.Root>
+					<Label>Satuan Hitung</Label>
+					<input type="hidden" name="unit" value={editUnit} />
+					<ToggleGroup.Root
+						type="single"
+						value={editUnit}
+						onValueChange={(v) => {
+							if (v === 'kg' || v === 'pcs') editUnit = v;
+						}}
+						variant="outline"
+						class="grid w-full grid-cols-2"
+					>
+						<ToggleGroup.Item value="kg">Kiloan (kg)</ToggleGroup.Item>
+						<ToggleGroup.Item value="pcs">Satuan (pcs)</ToggleGroup.Item>
+					</ToggleGroup.Root>
 				</div>
 				<div class="space-y-2">
-					<Label for="ec-active">Status</Label>
-					<Select.Root type="single" name="isActive" value={String(editCategory.isActive)}>
-						<Select.Trigger id="ec-active" class="w-full">
-							{editCategory.isActive ? 'Aktif' : 'Nonaktif'}
-						</Select.Trigger>
-						<Select.Content>
-							<Select.Item value="true">Aktif</Select.Item>
-							<Select.Item value="false">Nonaktif</Select.Item>
-						</Select.Content>
-					</Select.Root>
+					<Label>Status Kategori</Label>
+					<input type="hidden" name="isActive" value={editActive} />
+					<ToggleGroup.Root
+						type="single"
+						value={editActive}
+						onValueChange={(v) => {
+							if (v === 'true' || v === 'false') editActive = v;
+						}}
+						variant="outline"
+						class="grid w-full grid-cols-2"
+					>
+						<ToggleGroup.Item value="true">Aktif</ToggleGroup.Item>
+						<ToggleGroup.Item value="false">Nonaktif</ToggleGroup.Item>
+					</ToggleGroup.Root>
 				</div>
 				<Dialog.Footer>
-					<Button type="button" variant="secondary" onclick={() => (editCategory = null)}>Batal</Button>
-					<Button type="submit">Simpan</Button>
+					<Button type="button" variant="outline" onclick={() => (editCategory = null)}>
+						Batal
+					</Button>
+					<Button type="submit" disabled={submitting} class="gap-2">
+						{#if submitting}
+							<Spinner class="size-4" />
+						{/if}
+						Simpan Perubahan
+					</Button>
 				</Dialog.Footer>
 			</form>
 		{/if}
@@ -304,38 +568,78 @@
 
 <!-- Price Item Dialog -->
 <Dialog.Root bind:open={priceDialog.open}>
-	<Dialog.Content>
+	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>{priceDialog.item ? 'Edit Harga' : 'Tambah Harga'}</Dialog.Title>
+			<Dialog.Title>{priceDialog.item ? 'Edit Paket Tarif' : 'Tambah Paket Tarif'}</Dialog.Title>
+			{#if priceDialog.category}
+				<Dialog.Description>
+					Kategori: <span class="font-medium text-foreground">{priceDialog.category.name}</span>
+				</Dialog.Description>
+			{/if}
 		</Dialog.Header>
-		{#if priceDialog.open}
+		{#if priceDialog.open && priceDialog.category}
+			{@const unit = unitLabel(priceDialog.category.unit)}
 			<form
 				method="POST"
 				action={priceDialog.item ? '?/updatePriceItem' : '?/createPriceItem'}
 				use:enhance={handleEnhance}
 				class="space-y-4"
 			>
-				<input type="hidden" name="serviceCategoryId" value={priceDialog.categoryId} />
+				<input type="hidden" name="serviceCategoryId" value={priceDialog.category.id} />
 				{#if priceDialog.item}
 					<input type="hidden" name="id" value={priceDialog.item.id} />
 				{/if}
 				<div class="space-y-2">
-					<Label for="pi-min">Min Qty</Label>
-					<Input id="pi-min" name="minQty" type="number" step="0.01" min="0" value={priceDialog.item?.minQty ?? ''} required />
+					<Label for="pi-min">Minimal Qty</Label>
+					<InputGroup.Root>
+						<InputGroup.Input
+							id="pi-min"
+							name="minQty"
+							type="number"
+							step="0.01"
+							min="0"
+							placeholder="1"
+							value={priceDialog.item?.minQty ?? ''}
+							required
+						/>
+						<InputGroup.Addon align="inline-end">{unit}</InputGroup.Addon>
+					</InputGroup.Root>
+					<p class="text-xs text-muted-foreground">
+						Tarif ini aktif otomatis saat qty cucian mencapai minimal ini.
+					</p>
 				</div>
 				<div class="space-y-2">
-					<Label for="pi-price">Harga (Rp)</Label>
-					<div class="relative">
-						<span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Rp</span>
-						<Input id="pi-price" name="price" type="number" step="1" min="1" bind:value={priceValue} class="pl-9" required />
-					</div>
+					<Label for="pi-price">Harga per {unit}</Label>
+					<InputGroup.Root>
+						<InputGroup.Addon align="inline-start">Rp</InputGroup.Addon>
+						<InputGroup.Input
+							id="pi-price"
+							name="price"
+							type="number"
+							step="1"
+							min="1"
+							placeholder="7000"
+							bind:value={priceValue}
+							required
+						/>
+						<InputGroup.Addon align="inline-end">/ {unit}</InputGroup.Addon>
+					</InputGroup.Root>
 					<p class="text-xs text-muted-foreground">
-						Pratinjau: {formatRupiah(Number(priceValue) || 0)}
+						Pratinjau: <span class="font-medium text-foreground tabular-nums">
+							{formatRupiah(Number(priceValue) || 0)}/{unit}
+						</span>
 					</p>
 				</div>
 				<Dialog.Footer>
-					<Button type="button" variant="secondary" onclick={() => (priceDialog.open = false)}>Batal</Button>
-					<Button type="submit">Simpan</Button>
+					<Button type="button" variant="outline" onclick={() => (priceDialog.open = false)}>
+						Batal
+					</Button>
+					<Button type="submit" disabled={submitting} class="gap-2">
+						{#if submitting}
+							<Spinner class="size-4" />
+						{/if}
+						Simpan Tarif
+					</Button>
 				</Dialog.Footer>
 			</form>
 		{/if}
@@ -347,7 +651,8 @@
 	<AlertDialog.Content size="sm">
 		<AlertDialog.Header>
 			<AlertDialog.Title>
-				{deactivateTarget?.isActive ? 'Nonaktifkan' : 'Aktifkan'} {deactivateTarget?.type === 'category' ? 'kategori?' : 'harga?'}
+				{deactivateTarget?.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+				{deactivateTarget?.type === 'category' ? 'kategori?' : 'paket tarif?'}
 			</AlertDialog.Title>
 			<AlertDialog.Description>{deactivateTarget?.name}</AlertDialog.Description>
 		</AlertDialog.Header>
@@ -360,7 +665,7 @@
 			>
 				<input type="hidden" name="id" value={deactivateTarget?.id} />
 				<input type="hidden" name="isActive" value={String(!deactivateTarget?.isActive)} />
-				<AlertDialog.Action type="submit">
+				<AlertDialog.Action type="submit" disabled={submitting}>
 					{deactivateTarget?.isActive ? 'Nonaktifkan' : 'Aktifkan'}
 				</AlertDialog.Action>
 			</form>

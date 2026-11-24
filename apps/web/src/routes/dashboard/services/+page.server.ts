@@ -49,11 +49,16 @@ export const load: PageServerLoad = async (event) => {
 	if (status === 'inactive') and.push({ isActive: false });
 	if (and.length) where.AND = and;
 
-	const categories = await db.serviceCategory.findMany({
-		where,
-		include: { priceItems: { orderBy: { minQty: 'asc' } } },
-		orderBy: { createdAt: 'desc' }
-	});
+	const [categories, totalCategories, activeCategories, totalPriceItems] = await Promise.all([
+		db.serviceCategory.findMany({
+			where,
+			include: { priceItems: { orderBy: { minQty: 'asc' } } },
+			orderBy: { createdAt: 'desc' }
+		}),
+		db.serviceCategory.count(),
+		db.serviceCategory.count({ where: { isActive: true } }),
+		db.priceItem.count({ where: { isActive: true } })
+	]);
 
 	return {
 		categories: categories.map((c) => ({
@@ -63,6 +68,11 @@ export const load: PageServerLoad = async (event) => {
 				minQty: Number(p.minQty)
 			}))
 		})),
+		stats: {
+			totalCategories,
+			activeCategories,
+			totalPriceItems
+		},
 		q,
 		status
 	};

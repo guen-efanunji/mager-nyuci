@@ -13,5 +13,8 @@ export default defineConfig({
 			preprocess: vitePreprocess(),
 			adapter: adapter()
 		})
-	]
+	],
+	ssr: {
+		noExternal: ['layerchart']
+	}
 });
